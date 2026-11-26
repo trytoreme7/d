@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>출입 안내 · Door access</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;padding:48px 20px;text-align:center;color:#222;line-height:1.6}
+  h1{font-size:22px;margin:0 0 12px}
+  p{margin:0 0 8px}
+  .sub{color:#666;font-size:14px}
+  form{margin-top:20px}
+  input{width:100%;max-width:360px;box-sizing:border-box;padding:14px;font-size:20px;text-align:center;border:1px solid #bbb;border-radius:12px;text-transform:uppercase}
+  button{display:block;width:100%;max-width:360px;margin:16px auto 0;padding:18px 0;border:0;border-radius:12px;background:#007a8d;color:#fff;font-size:20px;font-weight:700;cursor:pointer}
+</style>
+</head>
+<body>
+<main id="main"><p>이동 중입니다…</p><p class="sub">Opening…</p></main>
+<noscript><p>이 페이지는 자바스크립트가 필요합니다. · JavaScript is required.</p></noscript>
+<script>
+/*
+ * 짧은 주소용 중간 페이지 (AirBnB_mng).
+ *   ?HMXXXXXXXX  → 그 예약의 도어락 문 열기 화면으로 바로 이동 (웹앱에 링크를 물어본 뒤 이동)
+ *   ?TKN_xxxxxx  → 담당자 앱으로 이동
+ * 웹앱(/exec) 주소가 바뀌면 아래 EXEC 만 고치면 된다. 이 파일에는 비밀값이 없다.
+ */
+(function () {
+  var EXEC = 'https://script.google.com/macros/s/AKfycbyNQdyv8LgCLrBXlAQIzUdomFxiFzpyOes8oYphcBJZ442DamU-q5eh4U62maqMzI2z/exec';
+  var main = document.getElementById('main');
+
+  var raw = (location.search.slice(1) || location.hash.slice(1)).split('&')[0];
+  try { raw = decodeURIComponent(raw); } catch (e) {}
+  raw = raw.replace(/^(door|code|token|c|t)=/i, '').trim();
+
+  if (/^TKN_[A-Za-z0-9]+$/.test(raw)) { location.replace(EXEC + '?token=' + raw); return; }   // 담당자 앱
+  if (/^[A-Za-z0-9]{10}$/.test(raw)) { openDoor(raw.toUpperCase()); return; }                 // 게스트
+  showForm('', raw ? 'notfound' : '');
+
+  function openDoor(code) {
+    // 웹앱에서 링크를 받지 못하면(지연·오류) 웹앱의 출입 페이지로 넘긴다 — 거기서도 문 열기 화면으로 이동한다
+    var fallback = function () { location.replace(EXEC + '?door=' + code); };
+    var timer = setTimeout(fallback, 12000);
+    fetch(EXEC + '?door=' + code + '&json=1')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        clearTimeout(timer);
+        if (d && d.ok && /^https:\/\//.test(d.link)) location.replace(d.link);
+        else showForm(code, (d && d.reason) || 'notfound');
+      })
+      .catch(function () { clearTimeout(timer); fallback(); });
+  }
+
+  function showForm(code, reason) {
+    var text = {
+      '':       ['예약 코드를 입력해 주세요.', 'Enter your confirmation code.'],
+      notfound: ['예약을 찾을 수 없습니다. 예약 코드를 확인해 주세요.', 'Reservation not found. Please check your confirmation code.'],
+      notready: ['출입 링크를 준비하고 있습니다. 잠시 후 다시 시도하거나 호스트에게 문의해 주세요.', 'Your door link is not ready yet. Please try again shortly or contact the host.']
+    }[reason] || ['다시 시도해 주세요.', 'Please try again.'];
+    main.textContent = '';
+    var h = document.createElement('h1'); h.textContent = '출입 안내 · Door access';
+    var p1 = document.createElement('p'); p1.textContent = text[0];
+    var p2 = document.createElement('p'); p2.className = 'sub'; p2.textContent = text[1];
+    var form = document.createElement('form');
+    var input = document.createElement('input');
+    input.placeholder = 'HM…'; input.maxLength = 10; input.required = true; input.value = code;
+    input.setAttribute('autocapitalize', 'characters'); input.setAttribute('autocomplete', 'off');
+    var btn = document.createElement('button'); btn.type = 'submit'; btn.textContent = '확인 · Continue';
+    form.appendChild(input); form.appendChild(btn);
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      location.href = location.pathname + '?' + encodeURIComponent(input.value.trim().toUpperCase());
+    });
+    main.appendChild(h); main.appendChild(p1); main.appendChild(p2); main.appendChild(form);
+  }
+})();
+</script>
+</body>
+</html>
